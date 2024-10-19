@@ -10,6 +10,7 @@ import numpy as np
 from src.utils import printProgressBar
 #import tensorflow.contrib.eager as tfe # obsolete in TF2
 import os
+import time
 
 
 class DILP():
@@ -32,6 +33,7 @@ class DILP():
         self.__init__parameters()
 
     def __init__parameters(self):
+        start = time.time()
         self.rule_weights = OrderedDict()
         ilp = ILP(self.language_frame, self.background,
                   self.positive, self.negative, self.program_template)
@@ -67,6 +69,11 @@ class DILP():
                 self.training_data[valuation_mapping[atom]] = 1.0
             elif atom in self.negative:
                 self.training_data[valuation_mapping[atom]] = 0.0
+        
+        end = time.time()
+        length = end - start
+
+        print("Init param elapsed time: ", length, " seconds.")
 
     def __all_variables(self):
         return [weights for weights in self.rule_weights.values()]
@@ -93,7 +100,6 @@ class DILP():
                 np.argmax(weights, axis=None), weights.shape)
             print(clauses[0][pos[0]])
             print(clauses[1][pos[1]])
-
             '''
             for i in range(len(indexes[0])):
                 if(weights[indexes[0][i], indexes[1][i]] > max_weights):
@@ -122,12 +128,14 @@ class DILP():
         #         print(e)
 
         losses = []
-        optimizer = tf.compat.v1.train.RMSPropOptimizer(learning_rate=0.05)
+        optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate=0.05)
 
         for i in range(steps):
             grads = self.grad()
+            print('Applying gradients...')
             optimizer.apply_gradients(zip(grads, self.__all_variables()),
                                       global_step=tf.compat.v1.train.get_or_create_global_step())
+            print('done')
             loss_avg = float(self.loss().numpy())
             losses.append(loss_avg)
             print("-" * 20)

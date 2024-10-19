@@ -7,67 +7,77 @@ from src.core import Atom, Term, Clause
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
-
 class Optimized_Combinatorial_Generator(Rule_Manger):
 
     def generate_clauses(self):
-        '''Generate all clauses with some level of optimization
-        '''
+        '''Generate all clauses with some level of optimization'''
         rule_matrix = []
         for rule in self.rules:
-            # logger.info('Generating clauses')
-            if rule == None:
+            if rule is None:
                 rule_matrix.append([None])
                 continue
-            clauses = []
-            if(rule.allow_intensional):
-                p = list(set(self.p_e + self.p_i + [self.target]))
-                p_i = list(set(self.p_i))
-                intensional_predicates = [atom.predicate for atom in p_i]
-            else:
-                p = list(set(self.p_e))
-            variables = ['X_%d' %
-                         i for i in range(0, self.target.arity + rule.v)]
-            target_variables = ['X_%d' %
-                                i for i in range(0, self.target.arity)]
-
-            # Generate the body list
-            body_list = []
-            head = Atom(
-                [Term(True, var) for var in target_variables], self.target.predicate)
-            for var1 in variables:
-                for var2 in variables:
-                    term1 = Term(True, var1)
-                    term2 = Term(True, var2)
-                    body_list.append([term1, term2])
-            # Generate the list
-            added_pred = {}
-            for ind1 in range(0, len(p)):
-                pred1 = p[ind1]
-                for b1 in body_list:
-                    for ind2 in range(ind1, len(p)):
-                        pred2 = p[ind2]
-                        for b2 in body_list:
-                            body1 = Atom([b1[index]
-                                          for index in range(0, pred1.arity)], pred1.predicate)
-                            body2 = Atom([b2[index]
-                                          for index in range(0, pred2.arity)], pred2.predicate)
-
-                            clause = Clause(head, [body1, body2])
-                            # logger.info(clause)
-                            # All variables in head should be in the body
-                            if not set(target_variables).issubset([v.name for v in b1] + [v.name for v in b2]):
-                                continue
-                            elif head == body1 or head == body2:  # No Circular
-                                continue
-                            # NOTE: Based on appendix requires to have a intensional predicate
-                            elif rule.allow_intensional and not (body1.predicate in intensional_predicates or body2.predicate in intensional_predicates):
-                                continue
-                            elif clause in added_pred:
-                                continue
-                            else:
-                                added_pred[clause] = 1
-                                clauses.append(clause)
+            clauses = self.generate_clauses_with_depth(rule)
             rule_matrix.append(clauses)
-            # logger.info('Clauses Generated')
+        print("done generating clauses")
         return rule_matrix
+
+    def generate_clauses_with_depth(self, rule, T=3):
+        '''Generate clauses with a maximum predicate chain depth of T'''
+        rule_matrix = []
+        p = list(set(self.p_e + self.p_i + [self.target]))
+        intensional_predicates = set(atom.predicate for atom in self.p_i) if rule.allow_intensional else set()
+
+        target_variables = ['X_%d' % i for i in range(self.target.arity)]
+
+        head = Atom([Term(True, var) for var in target_variables], self.target.predicate)
+
+        # Recursive function to generate body atoms up to depth T
+        def generate_body_atoms(depth):
+            if depth == 0:
+                return [[]]  # Base case: return an empty body
+
+            body_atoms = []
+            for pred in p:
+                # Generate body atoms for the current predicate
+                body_atom = Atom(self.generate_terms(pred.arity), pred.predicate)
+
+                # # Check for circular references and valid predicates
+                # if not self.is_valid_clause(head, [body_atom]):
+                #     continue
+                
+                # Recur for the next depth and append this body atom
+                for body_clause in generate_body_atoms(depth - 1):
+                    body_atoms.append(body_clause + [body_atom])
+
+            return body_atoms
+
+        # Generate all body combinations up to depth T
+        body_clauses = generate_body_atoms(T)
+
+        # Add valid clauses to rule_matrix
+        for body_clause in body_clauses:
+            clause = Clause(head, body_clause)
+            rule_matrix.append(clause)
+        print(len(rule_matrix))
+        return rule_matrix
+
+    def generate_terms(self, arity):
+        '''Generate terms for the given arity using variable names'''
+        return [Term(True, 'X_%d' % i) for i in range(arity)]
+
+    def is_valid_clause(self, head, body):
+        '''Check if the clause is valid based on specific conditions'''
+        target_variables = {v.name for v in head.terms}
+
+        # All variables in head should be in the body
+        if not target_variables.issubset({v.name for atom in body for v in atom.terms}):
+            return False
+        # No circular references
+        if head in body:
+            return False
+
+        # Check for intensional predicates if required
+        if any(atom.predicate in self.p_i for atom in body):
+            return True  # If it's an intensional predicate and allowed
+
+        return True

@@ -68,7 +68,7 @@ target = Atom([term_x_0, term_x_1], 'Response')
 # p_a_rule = (Rule_Template(1, False), None)
 target_rule = (
     Rule_Template(1, False),
-    Rule_Template(3, False)
+    Rule_Template(2, False)
 )
 rules = {target: target_rule}
 
@@ -78,6 +78,6 @@ program_template = Program_Template([], rules, 6)
 
 # Run DILP to learn the 2Back predicate
 dilp = DILP(language_frame, atoms, positive_examples, negative_examples, program_template)
-dilp.train(steps=12)
+dilp.train(steps=30)
 
 # (Presented(X,T)∧Presented(Y,T1)∧Same(X,Y)∧successor(T1,T)∧successor(T2,T1))
